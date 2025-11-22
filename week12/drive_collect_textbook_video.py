@@ -19,7 +19,7 @@ def save_img(frame, angle):
     global filecnt
     print('filecnt', filecnt)
 
-    filename = 'train_{0:05d}_{1:03d}.png'.format(filecnt, angle)
+    filename = 'train1_{0:05d}_{1:03d}.png'.format(filecnt, angle)
     filename = os.path.join(filepath, filename)
     #filename = filepath + 'train_{}_{}.png'.format(filecnt, angle)
     print('filename', filename)

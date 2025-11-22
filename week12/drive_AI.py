@@ -198,9 +198,9 @@ if __name__ == '__main__':
     print(v_x_grid)
     moment = np.array([0, 0, 0])
 
-    model_path = 'my_checkpoint/lane_navigation_20221115_0757.h5'
-    model_path = 'my_checkpoint/lane_navigation_ce_stable.h5'     # tf1.15  
-    model_path = 'my_checkpoint/lane_navigation_20221115_0808.h5'  # tf1.15  
+    model_path = 'lane_navigation_20251122_0111.h5'
+    #model_path = 'my_checkpoint/lane_navigation_ce_stable.h5'     # tf1.15  
+    #model_path = 'my_checkpoint/lane_navigation_20221115_0808.h5'  # tf1.15  
     #model_path = 'my_checkpoint/lane_navigation_20221115_0815.h5'  # tf2.2  
     
     model = load_model(model_path)

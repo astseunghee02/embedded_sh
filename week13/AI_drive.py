@@ -19,8 +19,12 @@ enable_AIdrive = False #ai drive 활성화 상태
 current_frame = None
 frame_lock = None
 
+# led 관련 전역 변수
+alarm_state = False  # 알람 상태 추적
+alarm_last_toggle = 0  # 마지막 토글 시간
+
 #object list
-DETECT_CLASSES = ['person','car','bus','bicycle']  
+DETECT_CLASSES = ['clock','book']  
 
 def func_thread():
     i = 0
@@ -35,31 +39,28 @@ def object_detection_thread():
     global object_detected, enable_object_detection, model_od, class_names, COLORS, detection_lock
     global current_frame, frame_lock
 
-    frame_count = 0  # 프레임 카운터 추가
-    SKIP_FRAMES = 3  # 3프레임마다 1번 감지 (조절 가능: 3~5 추천)
+    frame_count = 0
+    SKIP_FRAMES = 2
+    window_created = False  # 윈도우 생성 여부 추적
     
     while is_running:
-        if not enable_object_detection: #물체 감지 활성화가 False 일때
+        if not enable_object_detection:
             time.sleep(0.1)
-            continue #아래 코드 실행 X
+            continue
 
-        #if enable_object_detection => True 이면 아래코드 실행
-        with frame_lock:  #other thread 접근 차단
-            if current_frame is None: #frame이 없으면
+        with frame_lock:
+            if current_frame is None:
                 time.sleep(0.05)
                 continue
-            frame = current_frame.copy()  #frame 있으면 frame copy
+            frame = current_frame.copy()
 
-        frame_count += 1  # 프레임 카운트 증가
+        frame_count += 1
         
-        #N프레임마다 한 번만 물체 감지 수행
         if frame_count % SKIP_FRAMES != 0:
-            time.sleep(0.01)  # 짧은 대기 (10ms)
-            continue  # 물체 감지 건너뛰고 다음 루프로
+            time.sleep(0.01)
+            continue
         
-        # 여기서부터는 SKIP_FRAMES번째 프레임일 때만 실행됨
-        image_height, image_width, _ = frame.shape #image shape 분활
-        #blob 이미지 생성(4차원 배열 형태), size => image resize , mean (R,G,B) 평균값 뺌 , RB 채널 교환
+        image_height, image_width, _ = frame.shape
         blob = cv.dnn.blobFromImage(image=frame, size=(200,200), mean=(104,117,123), swapRB=True)
 
         model_od.setInput(blob)
@@ -74,7 +75,6 @@ def object_detection_thread():
                 class_id = int(detection[1])
                 class_name = class_names[class_id - 1] if class_id <= len(class_names) else 'Unknown'
                 
-                # object detection and continue
                 if class_name not in DETECT_CLASSES:
                     continue
                 
@@ -96,15 +96,18 @@ def object_detection_thread():
             object_detected = detect_in_frame
         
         cv.imshow('Object Detection', frame)
+        window_created = True  # 윈도우가 생성되었음을 표시
         cv.waitKey(1)
         
-        # time.sleep(0.05)  # 제거 또는 축소
-        time.sleep(0.01)  # 50ms → 10ms로 축소
+        time.sleep(0.01)
 
-    try:
-        cv.destroyWindow('Object Detection')
-    except:
-        pass
+    # 윈도우가 실제로 생성된 경우에만 종료 시도
+    if window_created:
+        try:
+            cv.destroyWindow('Object Detection')
+        except:
+            pass
+    
     print("물체 감지 스레드 종료")
 
 def key_cmd(which_key):
@@ -130,6 +133,7 @@ def key_cmd(which_key):
         print('stop')   
     elif which_key & 0xFF == ord('q'):  
         car.motor_stop()
+        car.alarm_off()  # 프로그램 종료 시 알람 끄기
         print('exit')   
         enable_AIdrive = False
         enable_object_detection = False
@@ -141,12 +145,14 @@ def key_cmd(which_key):
     elif which_key & 0xFF == ord('w'):  
         enable_AIdrive = False
         car.motor_stop()
+        car.alarm_off()  # AI 주행 중지 시 알람 끄기
         print('enable_AIdrive 2: ', enable_AIdrive)   
     elif which_key & 0xFF == ord('t'):
         enable_object_detection = True
         print('물체 감지 활성화:', enable_object_detection)
     elif which_key & 0xFF == ord('r'):
         enable_object_detection = False
+        car.alarm_off()  # 물체 감지 비활성화 시 알람 끄기
         print('물체 감지 비활성화:', enable_object_detection)
 
     return is_exit  
@@ -219,36 +225,58 @@ def test_fun(model):
 
 def drive_AI(img):
     global object_detected, enable_object_detection, detection_lock
+    global alarm_state, alarm_last_toggle
     
-    # 물체 감지 시 긴급 제동
+    # 물체 감지 시 긴급 제동 및 알람
     if detection_lock is not None:
         with detection_lock:
             if object_detected and enable_object_detection:
                 print("!!! 물체 감지 - 긴급 제동 !!!")
                 car.motor_stop()
-                time.sleep(0.3)
+                
+                # 0.3초마다 알람 토글 (깜빡임 효과)
+                current_time = time.time()
+                if current_time - alarm_last_toggle >= 0.3:
+                    if alarm_state:
+                        car.alarm_off()
+                        alarm_state = False
+                    else:
+                        car.alarm_on()
+                        alarm_state = True
+                    alarm_last_toggle = current_time
+                
+                time.sleep(0.05)  # 짧은 대기
                 return
+            else:
+                # 물체가 없으면 알람 끄기
+                if alarm_state:
+                    car.alarm_off()
+                    alarm_state = False
     
     # 정상 주행
-    img = np.expand_dims(img, 0)
-    res = model.predict(img)[0]
-    steering_angle = np.argmax(np.array(res))
-    print('steering_angle', steering_angle)
-    
-    if steering_angle == 0:
-        print("go")
-        speedSet = 60
-        car.motor_go(speedSet)
-    elif steering_angle == 1:
-        print("left")
-        speedSet = 20
-        car.motor_left(speedSet)          
-    elif steering_angle == 2:
-        print("right")
-        speedSet = 20
-        car.motor_right(speedSet)
-    else:
-        print("This cannot be entered")
+    try:
+        img = np.expand_dims(img, 0)
+        res = model.predict(img, verbose=0)[0]
+        steering_angle = np.argmax(np.array(res))
+        print('steering_angle', steering_angle)
+        
+        if steering_angle == 0:
+            print("go")
+            speedSet = 60
+            car.motor_go(speedSet)
+        elif steering_angle == 1:
+            print("left")
+            speedSet = 20
+            car.motor_left(speedSet)          
+        elif steering_angle == 2:
+            print("right")
+            speedSet = 20
+            car.motor_right(speedSet)
+        else:
+            print("This cannot be entered")
+    except Exception as e:
+        print(f"AI 주행 오류: {e}")
+        car.motor_stop()
 
 def main():
     global current_frame, frame_lock
@@ -256,8 +284,10 @@ def main():
     camera = cv.VideoCapture(0)
     camera.set(cv.CAP_PROP_FRAME_WIDTH, v_x) 
     camera.set(cv.CAP_PROP_FRAME_HEIGHT, v_y)
+    camera.set(cv.CAP_PROP_BUFFERSIZE, 1)  # 버퍼 최소화
     
     if not camera.isOpened():
+        print("카메라를 열 수 없습니다")
         return
     
     try:
@@ -269,7 +299,7 @@ def main():
                 
             frame = cv.flip(frame, -1)
            
-           #frame lock
+            #frame lock
             with frame_lock:
                 current_frame = frame.copy()
             
@@ -301,13 +331,15 @@ def main():
                 break
 
     except Exception as e:
+        print(f"오류 발생: {e}")
         exception_type, exception_object, exception_traceback = sys.exc_info()
         filename = exception_traceback.tb_frame.f_code.co_filename
         line_number = exception_traceback.tb_lineno
+        print(f"파일: {filename}, 라인: {line_number}")
 
-     
     finally:
         camera.release()
+        cv.destroyAllWindows()
   
 
 if __name__ == '__main__':
@@ -317,10 +349,14 @@ if __name__ == '__main__':
     print("Grid positions:", v_x_grid)
     moment = np.array([0, 0, 0])
 
+    # 알람 관련 전역 변수 초기화
+    alarm_state = False
+    alarm_last_toggle = 0
+
     #lane detection file
     model_path = 'lane_navigation_20251129_0502.h5'
     model = load_model(model_path)
-
+    
     model_od = cv.dnn.readNetFromTensorflow(model='frozen_inference_graph.pb', 
                                             config='ssd_mobilenet_v2_coco_2018_03_29.pbtxt')
     

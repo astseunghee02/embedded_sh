@@ -151,30 +151,29 @@ def key_cmd(which_key):
         enable_AIdrive = False     
         print('stop')   
     elif which_key & 0xFF == ord('q'):  
+        car.motor_stop()
         car.alarm_off()  # 프로그램 종료 시 알람 끄기
         print('exit')   
         enable_AIdrive = False
         enable_object_detection = False
-        is_exit = True   
-        car.motor_stop()
-        
+        is_exit = True    
         print('enable_AIdrive: ', enable_AIdrive)          
     elif which_key & 0xFF == ord('e'):  
         enable_AIdrive = True
-        print('[키보드] AI 주행 활성화:', enable_AIdrive)        
+        print('enable_AIdrive: ', enable_AIdrive)        
     elif which_key & 0xFF == ord('w'):  
         enable_AIdrive = False
         car.motor_stop()
         car.alarm_off()  # AI 주행 중지 시 알람 끄기
-        print('[키보드] AI 주행 비활성화:', enable_AIdrive)   
+        print('enable_AIdrive 2: ', enable_AIdrive)   
     elif which_key & 0xFF == ord('t'):
         enable_object_detection = True
-        print('[키보드] 물체 감지 활성화:', enable_object_detection)
-
+        print('물체 감지 활성화:', enable_object_detection)
     elif which_key & 0xFF == ord('r'):
         enable_object_detection = False
         car.alarm_off()  # 물체 감지 비활성화 시 알람 끄기
-        print('[키보드] 물체 감지 비활성화:', enable_object_detection)
+        print('물체 감지 비활성화:', enable_object_detection)
+
 
     return is_exit  
 

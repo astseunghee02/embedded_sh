@@ -8,13 +8,30 @@ class Drive:
             "SW1":5, "SW2":6, "SW3":13, "SW4":19,
             "PWMA":18, "AIN1":22, "AIN2":27,
             "PWMB":23, "BIN1":25, "BIN2":24,
-            "LED":26,      # GPIO26을 LED로 사용
+            "LED1":26, "LED2":16, "LED3":21, 
+            "LED4":20, "BUZ":12,
         }    
         self.config_GPIO()
         self.L_Motor = GPIO.PWM(self.pins["PWMA"], 500)
         self.L_Motor.start(0)
         self.R_Motor = GPIO.PWM(self.pins["PWMB"], 500)
         self.R_Motor.start(0)
+        
+        # 부저 PWM 초기화
+        self.Buzzer = GPIO.PWM(self.pins["BUZ"], 100)
+        self.Buzzer.start(0)
+        
+        # 음계 주파수 (도레미파솔라시도)
+        self.notes = {
+            'C': 262,   # 도
+            'D': 294,   # 레
+            'E': 330,   # 미
+            'F': 349,   # 파
+            'G': 392,   # 솔
+            'A': 440,   # 라
+            'B': 494,   # 시
+            'C2': 523,  # 높은 도
+        }
 
     def config_GPIO(self):
         GPIO.setwarnings(False)
@@ -31,12 +48,29 @@ class Drive:
         GPIO.setup(self.pins["BIN2"], GPIO.OUT)
         
         # LED 핀 설정
-        GPIO.setup(self.pins["LED"], GPIO.OUT)
-        GPIO.output(self.pins["LED"], GPIO.LOW)
+        GPIO.setup(self.pins["LED1"], GPIO.OUT)
+        GPIO.setup(self.pins["LED2"], GPIO.OUT)
+        GPIO.setup(self.pins["LED3"], GPIO.OUT)
+        GPIO.setup(self.pins["LED4"], GPIO.OUT)
+        
+        # 부저 핀 설정
+        GPIO.setup(self.pins["BUZ"], GPIO.OUT)
+        
+        # 초기 상태: 모두 OFF
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
 
     def clean_GPIO(self):
+        # 부저 끄기
+        self.Buzzer.stop()
+        
         # LED 끄기
-        GPIO.output(self.pins["LED"], GPIO.LOW)
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
         GPIO.cleanup()
     
     def motor_go(self, speed):
@@ -46,6 +80,11 @@ class Drive:
         GPIO.output(self.pins["BIN1"], 0)
         GPIO.output(self.pins["BIN2"], 1)
         self.R_Motor.ChangeDutyCycle(speed)
+        # LED 끄기 (직진 시)
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
 
     def motor_back(self, speed):
         GPIO.output(self.pins["AIN1"], 1)
@@ -54,6 +93,11 @@ class Drive:
         GPIO.output(self.pins["BIN1"], 1)
         GPIO.output(self.pins["BIN2"], 0)
         self.R_Motor.ChangeDutyCycle(speed)
+        # LED 끄기 (후진 시)
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
         
     def motor_left(self, speed):
         GPIO.output(self.pins["AIN1"], 1)
@@ -62,7 +106,12 @@ class Drive:
         GPIO.output(self.pins["BIN1"], 0)
         GPIO.output(self.pins["BIN2"], 1)
         self.R_Motor.ChangeDutyCycle(speed)
-        
+        # 좌회전 LED만 켜기
+        GPIO.output(self.pins["LED1"], GPIO.HIGH)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.HIGH)
+
     def motor_right(self, speed):
         GPIO.output(self.pins["AIN1"], 0)
         GPIO.output(self.pins["AIN2"], 1)
@@ -70,6 +119,11 @@ class Drive:
         GPIO.output(self.pins["BIN1"], 1)
         GPIO.output(self.pins["BIN2"], 0)
         self.R_Motor.ChangeDutyCycle(speed)
+        # 우회전 LED만 켜기
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.HIGH)
+        GPIO.output(self.pins["LED3"], GPIO.HIGH)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
 
     def motor_stop(self):
         GPIO.output(self.pins["AIN1"], 0)
@@ -78,15 +132,44 @@ class Drive:
         GPIO.output(self.pins["BIN1"], 0)
         GPIO.output(self.pins["BIN2"], 1)
         self.R_Motor.ChangeDutyCycle(0)
+        # 정지 시 모든 LED 끄기
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
 
-    # 알람 켜기 (LED ON)
+    # 알람 (모든 LED ON)
     def alarm_on(self):
-        GPIO.output(self.pins["LED"], GPIO.HIGH)
+        GPIO.output(self.pins["LED1"], GPIO.HIGH)
+        GPIO.output(self.pins["LED2"], GPIO.HIGH)
+        GPIO.output(self.pins["LED3"], GPIO.HIGH)
+        GPIO.output(self.pins["LED4"], GPIO.HIGH)
 
-    # 알람 끄기 (LED OFF)
+    # 알람 해제 (모든 LED OFF)
     def alarm_off(self):
-        GPIO.output(self.pins["LED"], GPIO.LOW)
+        GPIO.output(self.pins["LED1"], GPIO.LOW)
+        GPIO.output(self.pins["LED2"], GPIO.LOW)
+        GPIO.output(self.pins["LED3"], GPIO.LOW)
+        GPIO.output(self.pins["LED4"], GPIO.LOW)
 
+       # ===== 부저 함수 =====
+    
+    def buzzer_sound(self):
+        
+        self.Buzzer.ChangeFrequency(262)
+        self.Buzzer.ChangeDutyCycle(10)
+        time.sleep(0.5)
+        self.Buzzer.ChangeFrequency(330)
+        self.Buzzer.ChangeDutyCycle(10)
+        time.sleep(0.5)
+        self.Buzzer.ChangeFrequency(392)
+        self.Buzzer.ChangeDutyCycle(10)
+        time.sleep(0.5)
+        
+        self.Buzzer.ChangeDutyCycle(0)
+    
+    def buzzer_off(self):
+        self.Buzzer.ChangeDutyCycle(0)
 
 if __name__ == '__main__':
     drive = Drive()
